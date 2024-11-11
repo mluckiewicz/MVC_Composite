@@ -154,95 +154,169 @@ Template jest odpowiedzialny za przetwarzanie szablonów HTML. Dzięki tej klasi
 
 ## 4. Przykład implementacji nowego modułu
 
-### 4.1. Tworzenie nowego kontrolera
+### 4.1. Wstęp
 
-Kontroler jest odpowiedzialny za logikę aplikacji oraz interakcję między modelem a widokiem. Stwórzmy kontroler, który umożliwia dodawanie nowych recenzji.
+W tej części dokumentacji opisujemy, jak rozbudować aplikację o nowy moduł. Proces ten obejmuje wszystkie kroki potrzebne do dodania nowej funkcjonalności w architekturze MVC, począwszy od utworzenia nowego kontrolera i widoku, aż po rejestrację nowego modułu w routingu i komunikację z innymi komponentami za pomocą **EventBus**.
 
-**Przykład kodu:**
 
-```javascript
-class AddReviewController {
-  constructor(view, model) {
-    this.view = view;
-    this.model = model;
+### 4.2. Przykład implementacji nowego modułu
 
-    // Subskrypcja na dodanie recenzji
-    EventBus.subscribe('addReview', this.addReview.bind(this));
-  }
+Załóżmy, że chcemy dodać nowy moduł, który będzie odpowiedzialny za **dodawanie nowych recenzji**. Moduł ten będzie składał się z następujących komponentów:
 
-  addReview(reviewData) {
-    // Dodanie recenzji do modelu
-    this.model.addReview(reviewData);
-    // Zaktualizowanie widoku
-    this.view.render(this.model.getReviews());
-  }
+1. **Kontroler** - Zajmuje się logiką biznesową (np. dodawanie recenzji do modelu).
+2. **Widok** - Formularz do wprowadzania nowej recenzji.
+3. **Model** - Reprezentacja danych recenzji.
+4. **Routing** - Konfiguracja, która umożliwi nawigację do tego modułu.
+
+### 4.3. Kroki implementacji
+
+Aby dodać nowy moduł, należy wykonać poniższe kroki:
+
+#### 1. **Stworzenie kontrolera**
+Kontroler będzie odpowiedzialny za logikę aplikacji, zarządzanie widokiem i komunikację z modelem.
+
+#### 2. **Stworzenie widoku**
+Widok będzie odpowiedzialny za wyświetlenie formularza w UI oraz przekazanie danych do kontrolera.
+
+#### 3. **Stworzenie modelu**
+Model będzie zawierał dane związane z recenzjami, a także metody umożliwiające ich zapis i odczyt.
+
+#### 4. **Dodanie nowego widoku do routingu**
+Routing powinien zostać zaktualizowany o ścieżkę prowadzącą do nowego modułu, aby aplikacja wiedziała, kiedy renderować ten widok.
+
+
+### 4.4. Zasady implementacji w kontekście MVC
+
+- **Model**: Model odpowiada za przechowywanie danych, takich jak recenzje. Zapewnia metody umożliwiające m.in. dodanie recenzji lub ich filtrację.
+- **Widok**: Widok jest odpowiedzialny za renderowanie UI, w tym formularza lub tabeli danych. Nie powinien zawierać logiki biznesowej, a jedynie prezentować dane dostarczone przez kontroler.
+- **Kontroler**: Kontroler pełni rolę pośrednika między widokiem a modelem. Obsługuje akcje użytkownika, m.in. wysyła dane do modelu, przetwarza je, a następnie przekazuje do widoku.
+
+### 4.5. Przykład
+
+#### 4.5.1. **Tworzenie nowego kontrolera (AddReviewModuleController.js)**
+
+Kontroler zarządza logiką dodawania nowej recenzji. Subskrybuje zdarzenie z widoku (np. kliknięcie przycisku "Zapisz recenzję") i przekazuje dane do modelu.
+
+```js
+// AddReviewModuleController.js
+
+export class AddReviewModuleController {
+    constructor(app) {
+        this.app = app;
+        this.eventBus = new EventBus();  // Zainicjowanie EventBus
+        this.view = new AddReviewModuleView(this.eventBus); // Utworzenie widoku
+        this.model = new ReviewModel();  // Utworzenie modelu
+        this.initializeSubscriptions();
+    }
+
+    initializeSubscriptions() {
+        // Subskrypcja na zdarzenie 'addReview'
+        this.eventBus.subscribe('addReview', (reviewData) => {
+            this.model.addReview(reviewData); // Dodanie recenzji do modelu
+            console.log('Recenzja dodana:', reviewData);
+        });
+    }
+
+    handleViewChange() {
+        this.view.render();  // Renderowanie widoku
+    }
 }
 ```
 
-###
+#### 4.5.2. **Tworzenie nowego widoku (AddReviewModuleView.js)**
 
- 4.2. Tworzenie nowego widoku
+Widok będzie zawierał formularz do dodawania recenzji. Po kliknięciu przycisku "Zapisz recenzję" dane zostaną przesłane do kontrolera.
 
-Widok jest odpowiedzialny za prezentowanie danych. W tym przypadku, stwórzmy widok, który umożliwia dodanie recenzji.
+```js
+// AddReviewModuleView.js
 
-**Przykład kodu:**
+export class AddReviewModuleView {
+    constructor(eventBus) {
+        this.eventBus = eventBus;
+        this.container = document.getElementById('app'); // Główna sekcja aplikacji
+    }
 
-```javascript
-class AddReviewView {
-  constructor() {
-    this.element = document.querySelector('#add-review-form');
-  }
+    render() {
+        const form = document.createElement('form');
+        form.innerHTML = `
+            <label for="reviewText">Recenzja:</label>
+            <textarea id="reviewText" name="reviewText" required></textarea>
+            <button type="submit">Zapisz recenzję</button>
+        `;
 
-  render(reviews) {
-    // Wyświetlanie formularza i listy recenzji
-    this.element.innerHTML = this.generateReviewListHTML(reviews);
-  }
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const reviewData = { text: form.reviewText.value };
+            this.eventBus.publish('addReview', reviewData);  // Publikowanie zdarzenia 'addReview'
+            form.reset();  // Resetowanie formularza po wysłaniu
+        });
 
-  generateReviewListHTML(reviews) {
-    return reviews.map(review => `<li>${review.comment}</li>`).join('');
-  }
+        this.container.innerHTML = '';
+        this.container.appendChild(form);  // Dodawanie formularza do DOM
+    }
 }
 ```
 
-### 4.3. Tworzenie nowego modelu
+#### 4.5.3. **Model danych (ReviewModel.js)**
 
-Model przechowuje dane aplikacji. W przypadku dodawania recenzji, model będzie odpowiedzialny za przechowywanie danych recenzji.
+Model przechowuje dane recenzji. Dodawanie nowych recenzji odbywa się poprzez metodę `addReview`.
 
-**Przykład kodu:**
+```js
+// ReviewModel.js
 
-```javascript
-class ReviewModel {
-  constructor() {
-    this.reviews = [];
-  }
+export class ReviewModel {
+    constructor() {
+        this.reviews = [];  // Tablica przechowująca recenzje
+    }
 
-  addReview(review) {
-    this.reviews.push(review);
-  }
+    addReview(review) {
+        this.reviews.push(review);  // Dodawanie recenzji do tablicy
+    }
 
-  getReviews() {
-    return this.reviews;
-  }
+    getReviews() {
+        return this.reviews;  // Zwracanie wszystkich recenzji
+    }
 }
 ```
 
-### 4.4. Dodanie modułu do routingu
+#### 4.5.4. **Rejestracja nowego widoku w Routingu (Routing.js)**
 
-Routing jest odpowiedzialny za nawigację w aplikacji. Aby nowy widok i kontroler były dostępne w systemie routingu, należy zaktualizować definicję routingu.
+Routing musi zostać zaktualizowany, aby aplikacja mogła nawigować do nowego widoku "AddReview".
 
-**Przykład kodu:**
+```js
+// Routing.js
 
-```javascript
-Routing.addRoute('addReview', () => {
-  const model = new ReviewModel();
-  const view = new AddReviewView();
-  const controller = new AddReviewController(view, model);
+export class Routing {
+    constructor(app) {
+        this.app = app;
+        this.controllers = {
+            'home': new HomeModuleController(this.app),
+            'review': new ReviewModuleController(this.app),
+            'addReview': new AddReviewModuleController(this.app) // Rejestracja nowego kontrolera
+        }
+    }
 
-  view.render(model.getReviews());
-});
+    route(viewName) {
+        const controller = this.controllers[viewName];
+        if (controller) {
+            controller.handleViewChange();
+            window.history.pushState({ view: viewName }, '', `#${viewName}`);
+        }
+    }
+
+    // Inne metody routingowe...
+}
 ```
 
 ---
+
+#### 4.5.5. Podsumowanie Dodania nowego modułu
+
+Dodanie nowego modułu do aplikacji wymaga utworzenia nowego kontrolera, widoku i aktualizacji routingu. Kontroler odpowiada za logikę, zarządza modelem i komunikuje się z widokiem. Widok jest odpowiedzialny za interakcję z użytkownikiem i przesyłanie danych do kontrolera. Routing natomiast umożliwia nawigację między poszczególnymi widokami aplikacji. W przypadku tej aplikacji korzystamy z **EventBus**, który umożliwia komunikację między komponentami w sposób luźno powiązany, co zwiększa elastyczność systemu.
+
+Moduł dodawania recenzji to przykład rozszerzenia aplikacji, które jest zgodne z zasadami wzorca **MVC** i pozwala na łatwą rozbudowę o nowe funkcjonalności.
+
+
 
 ## 5. Podsumowanie
 
